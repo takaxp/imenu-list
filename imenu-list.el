@@ -211,9 +211,9 @@ EVENT holds the data of what was clicked."
         (ilist-buffer (get-buffer imenu-list-buffer-name)))
     (when (and (windowp window)
                (eql (window-buffer window) ilist-buffer))
-      (with-current-buffer ilist-buffer
-        (goto-char pos)
-        (imenu-list-goto-entry)))))
+      (switch-to-buffer ilist-buffer)
+      (goto-char pos)
+      (imenu-list-goto-entry))))
 
 (defun imenu-list--action-toggle-hs (event)
   "Toggle hide/show state of current block.
