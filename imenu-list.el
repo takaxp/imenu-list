@@ -479,6 +479,15 @@ If it doesn't exist, create it."
     (mapc #'fit-window-to-buffer
           (get-buffer-window-list (imenu-list-get-buffer-create)))))
 
+(defvar imenu-list-post-processing-hook nil)
+(defun imenu-list--post-processing ()
+  (when (eq this-command 'imenu-list)
+    (unless imenu-list--displayed-buffer
+      (kill-buffer (get-buffer imenu-list-buffer-name)))
+    (setq imenu-list--last-location nil)
+    (run-hooks 'imenu-list-post-processing-hook))
+  (remove-hook 'post-command-hook #'imenu-list--post-processing))
+
 (defun imenu-list-update (&optional raise-imenu-errors force-update)
   "Update the imenu-list buffer.
 If the imenu-list buffer doesn't exist, create it.
@@ -492,33 +501,34 @@ Oherwise `imenu-list-update' will return the error that has occured, as
 If FORCE-UPDATE is non-nil, the imenu-list buffer is updated even if the
 imenu entries did not change since the last update."
   (catch 'index-failure
-      (let ((old-entries imenu-list--imenu-entries)
-            (location (point-marker)))
-        ;; don't update if `point' didn't move - fixes issue #11
-        (unless (and (null force-update)
-                     imenu-list--last-location
-                     (marker-buffer imenu-list--last-location)
-                     (= location imenu-list--last-location))
-          (setq imenu-list--last-location location)
-          (if raise-imenu-errors
+    (let ((old-entries imenu-list--imenu-entries)
+          (location (point-marker)))
+      ;; don't update if `point' didn't move - fixes issue #11
+      (unless (and (null force-update)
+                   imenu-list--last-location
+                   (marker-buffer imenu-list--last-location)
+                   (= location imenu-list--last-location))
+        (setq imenu-list--last-location location)
+        (add-hook 'post-command-hook #'imenu-list--post-processing)
+        (if raise-imenu-errors
+            (imenu-list-collect-entries)
+          (condition-case err
               (imenu-list-collect-entries)
-            (condition-case err
-                (imenu-list-collect-entries)
-              (error
-               (message "imenu-list: couldn't create index because of error: %S" err)
-               (throw 'index-failure err))))
-          (when (or force-update
-                    ;; check if Ilist buffer is alive, in case it was killed
-                    ;; since last update
-                    (null (get-buffer imenu-list-buffer-name))
-                    (not (equal old-entries imenu-list--imenu-entries)))
-            (with-current-buffer (imenu-list-get-buffer-create)
-              (imenu-list-insert-entries)))
-          (imenu-list--show-current-entry)
-          (when imenu-list-auto-resize
-            (imenu-list-resize-window))
-          (run-hooks 'imenu-list-update-hook)
-          nil))))
+            (error
+             (message "imenu-list: couldn't create index because of error: %S" err)
+             (throw 'index-failure err))))
+        (when (or force-update
+                  ;; check if Ilist buffer is alive, in case it was killed
+                  ;; since last update
+                  (null (get-buffer imenu-list-buffer-name))
+                  (not (equal old-entries imenu-list--imenu-entries)))
+          (with-current-buffer (imenu-list-get-buffer-create)
+            (imenu-list-insert-entries)))
+        (imenu-list--show-current-entry)
+        (when imenu-list-auto-resize
+          (imenu-list-resize-window))
+        (run-hooks 'imenu-list-update-hook)
+        nil))))
 
 (defun imenu-list-refresh ()
   "Refresh imenu-list buffer."
